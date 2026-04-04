@@ -30,7 +30,8 @@ class SemanticGrader:
         constraints: Dict[str, Any],
     ) -> float:
         """Compute the multi-component Phi score."""
-        content = files.get("data.csv", "")
+        target_file = constraints.get("target_file", "data.csv")
+        content = files.get(target_file, "")
 
         try:
             df = pd.read_csv(io.StringIO(content))

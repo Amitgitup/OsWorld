@@ -37,25 +37,31 @@ You must create a `.env` file in the root of the project with your API key:
 
 ## Task Structure
 
-The environment includes **6 task variants** across 3 difficulty tiers:
+The environment includes **12 task variants** across 3 difficulty tiers:
 
-### Easy (2 issues per task)
+### Easy (4 variants)
 | Variant | Description |
 |---------|-------------|
-| **Duplicate Removal** | Wrong column casing + Duplicate rows |
-| **Format Normalization** | Wrong column casing + Inconsistent formatting (whitespace/casing) |
+| **Duplicate Removal** | Standardize column names. Remove duplicate rows. |
+| **Format Normalization** | Standardize names to lowercase without leading/trailing whitespace. |
+| **Type Coercion** | Convert ages to int, Yes/No to booleans, standardize columns. |
+| **Column Rename Only** | Properly rename column headers. |
 
-### Medium (3-5 issues per task)
+### Medium (5 variants)
 | Variant | Description |
 |---------|-------------|
-| **Missing Value Imputation** | Wrong column casing + Extra column + Null imputation |
-| **Schema Repair** | Non-standard column names + Extra column |
-| **Constraint Enforcement** | Wrong column casing + Extra column + Duplicated IDs + Range clamps |
+| **Missing Value Imputation** | Drop extra columns, standardize names, fill missing with 0. |
+| **Schema Repair** | Standardize weird column names and strip extra flags. |
+| **Constraint Enforcement** | Deduplicate, enforce bounds, standardize names. |
+| **Multi-File Join** | Clean secondary file, join on user_id, save as new csv. |
+| **JSON Normalization** | Flatten deeply nested JSON into standard tabular dataframe. |
 
-### Hard (7-9 issues combined)
+### Hard (3 variants)
 | Variant | Description |
 |---------|-------------|
-| **Corrupted Pipeline Recovery** | Schema + extra col + duplicates + nulls + formatting + range clamps |
+| **Corrupted Pipeline Recovery** | Corrupted rows, bounds enforcement, str cleaning, dedup, fill. |
+| **Adversarial Corruption** | Syntactically intact but semantically impossible constraints. |
+| **Cascading Pipeline** | Multi-file dependency. Extract rates, compute new columns, fill bounds. |
 
 Tasks cycle automatically on each `reset()` call.
 
@@ -74,7 +80,7 @@ Score = 0.4 * content_score    (F1: precision + recall via merge)
 ## Running the Project
 
 ### 1. Run the Baseline Agent (End-to-End)
-This executes the LLM agent across all 6 task variants. It spins up the server dynamically.
+This executes the LLM agent across the 15-episode cycle, encountering all 12 task variants. It spins up the server dynamically.
 ```bash
 uv run baseline.py
 ```

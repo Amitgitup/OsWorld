@@ -9,9 +9,31 @@ from typing import Dict, Any
 
 class Payload(BaseModel):
     # Defining a specific schema instead of Dict[str, Any] which breaks strict structured parsing
+    filename: str | None = None
+    n: int | None = None
     column: str | None = None
     value: str | None = None
     code: str | None = None
+
+def sanitize_payload(payload_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip trailing JSON syntax or markdown junk from string fields."""
+    cleaned = {}
+    for k, v in payload_dict.items():
+        if isinstance(v, str) and v:
+            # If it's the code field, firmly strip markdown fences
+            if k == "code":
+                v = v.strip()
+                if v.startswith("```python"):
+                    v = v[len("```python"):].strip()
+                elif v.startswith("```"):
+                    v = v[len("```"):].strip()
+                if v.endswith("```"):
+                    v = v[:-3].strip()
+            # For purely string filenames, strip hallucinated JSON closures
+            elif k in ["filename", "column", "value"]:
+                v = v.split('}')[0].split(']')[0].strip().strip('"`')
+        cleaned[k] = v
+    return cleaned
 
 class LLMAction(BaseModel):
     action_type: str
@@ -19,15 +41,12 @@ class LLMAction(BaseModel):
 
 load_dotenv()
 
-# The environment auto-cycles through 6 task variants across 3 difficulty tiers:
-#   Reset 1 -> Easy   v0 (2 issues: wrong col casing + duplicate rows)
-#   Reset 2 -> Medium v0 (3 issues: wrong col casing + extra col + null imputation)
-#   Reset 3 -> Hard   v0 (9 issues: rename 3 cols + drop extra + dedup + name fmt + null + range x2)
-#   Reset 4 -> Easy   v1 (2 issues: wrong col casing + string whitespace/casing in values)
-#   Reset 5 -> Medium v1 (3 issues: non-standard col names + extra col)
-#   Reset 6 -> Hard   v0 (Corrupted Pipeline, wraps)
-# We run 6 episodes to cover all unique variants.
-NUM_EPISODES = 6
+# The environment auto-cycles through 12 task variants across 3 difficulty tiers:
+# (Easy: 4 tasks, Medium: 5 tasks, Hard: 3 tasks)
+# It alternates tiers each reset (Easy -> Medium -> Hard -> Easy...)
+# To ensure the baseline sees every single Medium variant (the max at 5),
+# we need to run 5 * 3 = 15 episodes. (Easy and Hard tasks will naturally repeat).
+NUM_EPISODES = 15
 
 def main():
     # Initialize the OpenAI client to point to OpenRouter
@@ -63,10 +82,10 @@ def main():
         print(f"Initial Score: {obs.score:.4f}")
 
         step = 0
+        history = []
         
         while not done:
             obs_dict = obs.model_dump() if hasattr(obs, 'model_dump') else obs.dict()
-            
             prompt = f"""
 You are an expert data cleaning bot. Here is your current observation:
 {json.dumps(obs_dict, indent=2)}
@@ -80,26 +99,58 @@ The environment scores you on 4 components:
 - Validity (20%): No nulls in required fields, correct types, clean formatting
 - Constraints (20%): Unique IDs where required, values in valid ranges
 
-Use action_type "execute_python" with a "code" field in the payload.
-Your code has access to a `files` dict. Read/write CSV via files["data.csv"].
-Example:
-  action_type: "execute_python"
-  payload: {{"code": "import pandas as pd\\nimport io\\ndf = pd.read_csv(io.StringIO(files['data.csv']))\\n# ... clean ...\\nfiles['data.csv'] = df.to_csv(index=False)"}}
+Available Action Types:
+1. "inspect_schema": Check column names and types. Use "filename" in payload.
+2. "view_head": Look at the first N rows. Use "filename" and "n" (default 5) in payload.
+3. "read_file": Read the entire file content. Use "filename" in payload.
+4. "preview_changes": Test your "code" without saving changes. High transparency, zero risk.
+5. "execute_python": Run your "code" and PERMANENTLY update the files.
+6. "remove_duplicates": Quick tool for row deduplication. Use "filename".
+7. "fill_nulls": Quick tool to fill missing values. Use "filename" and "value".
 
-Decide on the next action to progress data cleaning. Be precise.
+PYTHON EXECUTION RULES:
+For `execute_python` and `preview_changes`, your code runs in a sandboxed `exec()` environment.
+- You have access to a `files` dictionary containing the file strings.
+- You MUST read and write the CSV via this dict: `files["data.csv"]`
+- Example Pattern:
+  ```python
+  import pandas as pd
+  import io
+  df = pd.read_csv(io.StringIO(files['data.csv']))
+  # apply fixes...
+  files['data.csv'] = df.to_csv(index=False)
+  ```
+
+Strategic Tips:
+- Use "inspect_schema" or "view_head" FIRST to diagnose the problem. There is an "Inspect-First Bonus" (+0.05) to your reward for doing this.
+- Use "preview_changes" if you are unsure about your Pandas logic.
+- When ready, use "execute_python" with clear, vectorized Pandas code to solve the task.
+
+Decide on the next action to progress data cleaning.
+
+CRITICAL: Your response must be a single, valid JSON object. 
+Do not include any words, markdown backticks, or thoughts outside the JSON.
 """
-            
+            user_msg = {"role": "user", "content": prompt}
+            messages = [{"role": "system", "content": "You are a professional data cleaning engineer."}]
+            messages.extend(history)
+            messages.append(user_msg)
+
             try:
                 response = openai_client.beta.chat.completions.parse(
                     model="openai/gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a professional data cleaning engineer."},
-                        {"role": "user", "content": prompt}
-                    ],
+                    messages=messages,
                     response_format=LLMAction,
                 )
+                
+                # Update history so the agent remembers its actions
+                history.append(user_msg)
+                history.append({"role": "assistant", "content": response.choices[0].message.content})
+
                 llm_action = response.choices[0].message.parsed
                 payload_dict = llm_action.payload.model_dump(exclude_none=True)
+                # Sanitize to prevent "data.csv}}]}" hallucinations
+                payload_dict = sanitize_payload(payload_dict)
                 
                 action = OsworldAction(
                     action_type=llm_action.action_type,

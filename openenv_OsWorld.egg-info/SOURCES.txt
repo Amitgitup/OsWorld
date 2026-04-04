@@ -1,12 +1,17 @@
 README.md
 __init__.py
+baseline.py
 client.py
 models.py
 pyproject.toml
 ./__init__.py
 ./baseline.py
 ./client.py
+./debug_edge_cases.py
+./demonstrate_faker.py
+./eval.py
 ./models.py
+./run_all_tests.py
 openenv_OsWorld.egg-info/PKG-INFO
 openenv_OsWorld.egg-info/SOURCES.txt
 openenv_OsWorld.egg-info/dependency_links.txt
@@ -16,3 +21,6 @@ openenv_OsWorld.egg-info/top_level.txt
 server/OsWorld_environment.py
 server/__init__.py
 server/app.py
+server/graders.py
+server/rewards.py
+server/tasks.py

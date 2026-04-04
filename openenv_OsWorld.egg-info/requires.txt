@@ -1,4 +1,7 @@
 openenv-core[core]>=0.2.1
+faker>=20.0.0
+numpy>=1.20.0
+pandas>=2.0.0
 
 [dev]
 pytest>=8.0.0

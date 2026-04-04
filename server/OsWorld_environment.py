@@ -13,6 +13,7 @@ Data Cleaning environment with multi-component grading,
 
 import contextlib
 import io
+import random
 from typing import Dict
 from uuid import uuid4
 
@@ -53,6 +54,7 @@ class OsworldEnvironment(Environment):
         self.task_config: TaskConfig = None
         self.screen_text = ""
         self.max_steps = 10
+        self.first_action_type = None
 
         # Modular components
         self.grader = SemanticGrader()
@@ -95,8 +97,10 @@ class OsworldEnvironment(Environment):
             # Automatic curriculum: EASY → MEDIUM → HARD → EASY …
             self.task_level = get_next_level(self._reset_count)
 
+        seed = options.get("seed", random.randint(0, 10**8)) if options else random.randint(0, 10**8)
+
         # Get task variant (cycles within each tier)
-        self.task_config = get_task_setup(self.task_level, self._reset_count)
+        self.task_config = get_task_setup(self.task_level, seed, self._reset_count)
         # Copy files so we don't mutate the task definition
         self.files = dict(self.task_config.files)
         self.screen_text = self.task_config.screen_text
@@ -113,6 +117,10 @@ class OsworldEnvironment(Environment):
     def step(self, action: OsworldAction) -> OsworldObservation:  # type: ignore[override]
         """Execute an action and return the observation."""
         self._state.step_count += 1
+        
+        if self._state.step_count == 1:
+            self.first_action_type = action.action_type
+            
         self.screen_text = f"Executed {action.action_type}."
 
         is_error = False
@@ -146,6 +154,62 @@ class OsworldEnvironment(Environment):
                 )
                 is_error = True
 
+        elif action.action_type == "preview_changes":
+            code = action.payload.get("code", "")
+            file_snapshot = dict(self.files)
+            f = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(f):
+                    local_vars = {"files": self.files}
+                    exec(
+                        "import pandas as pd\nimport io\nimport traceback\n" + code,
+                        {},
+                        local_vars,
+                    )
+                self.screen_text = (
+                    "PREVIEW ONLY - NO CHANGES SAVED\n" + (f.getvalue() or f"Successfully executed: {len(code)} chars.")
+                )
+            except Exception:
+                import traceback
+                self.screen_text = (
+                    f"Python Execution Error (Preview):\n{traceback.format_exc()}"
+                )
+                is_error = True
+            finally:
+                self.files = file_snapshot
+
+        elif action.action_type == "inspect_schema":
+            filename = action.payload.get("filename", "data.csv")
+            if filename in self.files:
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(io.StringIO(self.files[filename]))
+                    self.screen_text = f"Schema for {filename}:\n{df.dtypes.to_string()}"
+                except Exception as e:
+                    self.screen_text = f"Error reading {filename}: {e}"
+            else:
+                self.screen_text = f"File not found: {filename}"
+
+        elif action.action_type == "view_head":
+            filename = action.payload.get("filename", "data.csv")
+            n = action.payload.get("n", 5)
+            if filename in self.files:
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(io.StringIO(self.files[filename]))
+                    self.screen_text = f"Head of {filename}:\n{df.head(n).to_string()}"
+                except Exception as e:
+                    self.screen_text = f"Error reading {filename}: {e}"
+            else:
+                self.screen_text = f"File not found: {filename}"
+
+        elif action.action_type == "read_file":
+            filename = action.payload.get("filename", "data.csv")
+            if filename in self.files:
+                self.screen_text = f"Contents of {filename}:\n{self.files[filename]}"
+            else:
+                self.screen_text = f"File not found: {filename}"
+
         elif action.action_type == "remove_duplicates":
             filename = action.payload.get("filename", "data.csv")
             if filename in self.files:
@@ -178,6 +242,9 @@ class OsworldEnvironment(Environment):
             old_score=old_score,
             new_score=new_score,
             done=done,
+            step_count=self._state.step_count,
+            optimal_steps=self.task_config.optimal_steps,
+            first_action_type=self.first_action_type,
             is_error=is_error,
             is_unknown=is_unknown,
         )

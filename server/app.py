@@ -49,7 +49,7 @@ app = create_app(
     OsworldAction,
     OsworldObservation,
     env_name="OsWorld",
-    max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
+    max_concurrent_envs=16,  # increased to allow 16 concurrent training sessions/workers
 )
 
 
