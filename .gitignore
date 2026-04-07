@@ -36,6 +36,9 @@ MANIFEST
 # Project specific
 cleaned_data.csv
 data.csv
+final.csv
+Build_process/
+*.log
 
 # IDEs / OS files
 .vscode/

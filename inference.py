@@ -105,26 +105,30 @@ async def main() -> None:
                 
                 obs_dict = obs.model_dump() if hasattr(obs, 'model_dump') else obs.dict()
                 prompt = f"""
-You are an expert data cleaning bot. Here is your current observation:
+You are a specialized Data Engineering Agent. You must resolve data quality issues programmatically.
+Here is your current observation:
 {json.dumps(obs_dict, indent=2)}
 
-You must solve the current_task by writing Python code to fix the dataset.
-Your goal is to transform the CSV semantically to match clean structures exactly.
+Your goal is to transform the provided datasets to match a rigorous clean structure. You are evaluated on:
+- Content Accuracy: Ensuring precision and recall of the data records.
+- Schema Integrity: Validating column names, types, and strict ordering.
+- Data Validity: Eliminating nulls, standardizing formats, and correcting types.
+- Constraint Satisfaction: Enforcing uniqueness and logical range boundaries.
 
-The environment scores you on 4 components:
-- Content (40%): Are the correct rows present? (F1: precision + recall)
-- Schema (20%): Are column names correct and in the right order?
-- Validity (20%): No nulls in required fields, correct types, clean formatting
-- Constraints (20%): Unique IDs where required, values in valid ranges
+ENVIRONMENT REWARDS & REASONING:
+- This is a Reinforcement Learning environment. You receive positive rewards for incremental progress toward the clean state.
+- Efficiency is critical. Your evaluation score is scaled by how few actions you take to reach the goal.
+- Catastrophic data loss (e.g., dropping the majority of rows accidentally) results in a heavy negative penalty.
+- Professional methodology is incentivized. It is highly recommended to inspect the data and schema before committing to permanent changes.
 
 Available Action Types:
 1. "inspect_schema": Check column names and types. Use "filename" in payload.
 2. "view_head": Look at the first N rows. Use "filename" and "n" (default 5) in payload.
 3. "read_file": Read the entire file content. Use "filename" in payload.
-4. "preview_changes": Test your "code" without saving changes. High transparency, zero risk.
-5. "execute_python": Run your "code" and PERMANENTLY update the files.
-6. "remove_duplicates": Quick tool for row deduplication. Use "filename".
-7. "fill_nulls": Quick tool to fill missing values. Use "filename" and "value".
+4. "preview_changes": Test your "code" without saving changes. (Zero risk, high transparency).
+5. "execute_python": Perform permanent file mutations via Python code.
+6. "remove_duplicates": Utility to deduplicate a file. Use "filename".
+7. "fill_nulls": Utility to fill missing values. Use "filename" and "value".
 
 PYTHON EXECUTION RULES:
 For `execute_python` and `preview_changes`, your code runs in a sandboxed `exec()` environment.
@@ -139,8 +143,7 @@ For `execute_python` and `preview_changes`, your code runs in a sandboxed `exec(
     }}
   }}
 
-Decide on the next action to progress data cleaning.
-CRITICAL: Your response must be a single, valid JSON object matching the schema exactly.
+Decide on the next action. Your response must be a single, valid JSON object matching the schema exactly.
 """
                 user_msg = {"role": "user", "content": prompt}
                 messages = [{"role": "system", "content": "You are a professional data cleaning engineer."}]
@@ -165,7 +168,6 @@ CRITICAL: Your response must be a single, valid JSON object matching the schema 
                     history.append(user_msg)
                     history.append({"role": "assistant", "content": content})
 
-                    import json
                     try:
                         parsed_json = json.loads(content)
                         # Map to our models to validate

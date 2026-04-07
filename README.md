@@ -124,7 +124,7 @@ uv run python eval.py
 
 For deep dives into how the underlying architecture works, see `Build_process/`:
 
-- [**Scenarios and Difficulties**](Build_process/01_scenarios_and_difficulties.md): Details on the 6 task variants across Easy, Medium, and Hard tiers.
+- [**Scenarios and Difficulties**](Build_process/01_scenarios_and_difficulties.md): Details on the 12 task variants across Easy, Medium, and Hard tiers.
 - [**Semantic Grading Mechanics**](Build_process/02_grading_mechanics.md): How the multi-component grader eliminates the vulnerabilities of string-matching and merge-only scoring.
 - [**Reward Shaping & Scoring**](Build_process/03_reward_shaping.md): How potential-based reward shaping with regression penalties enforces optimal reasoning paths.
 
@@ -141,7 +141,7 @@ OsWorld/
 ├── pyproject.toml         # Requirements
 └── server/
     ├── OsWorld_environment.py  # Core environment logic
-    ├── tasks.py           # 6 task variants with expected states + constraints
+    ├── tasks.py           # 12 task variants with expected states + constraints
     ├── graders.py         # Multi-component semantic grader (Phi)
     ├── rewards.py         # Reward shaping calculator
     └── app.py             # FastAPI App

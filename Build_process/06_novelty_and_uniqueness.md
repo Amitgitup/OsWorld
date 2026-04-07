@@ -40,7 +40,7 @@ We solve the "Reward Hacking" problem by strictly aligning the reinforcement sig
 |-----------|-------------------|
 | **Step Penalty (-0.03)** | Encourages the shortest, most efficient code paths. |
 | **Regression Penalty (-0.10)** | Strongly discourages destructive actions or "guess-and-check" strategies. |
-| **Efficiency Bonus** | Scales the final 10.0 terminal reward based on `optimal_steps` vs actual steps taken. |
+| **Efficiency Bonus** | Scales the final 1.0 terminal reward based on `optimal_steps` vs actual steps taken. |
 | **Inspect-First Bonus** | Rewards agents for using diagnostic tools (`view_head`, `inspect_schema`) before committing to data-altering code. |
 
 ## 5. Summary: Why it Works for Training

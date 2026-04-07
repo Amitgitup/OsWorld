@@ -14,7 +14,7 @@ class RewardCalculator:
         error_penalty: float = -0.2,
         regression_penalty: float = -0.1,
         destructive_penalty: float = -0.5,
-        terminal_reward: float = 1.0,
+        terminal_reward: float = 2.0,
         inspect_first_bonus: float = 0.05,
     ):
         self.step_penalty = step_penalty

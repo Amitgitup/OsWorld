@@ -8,7 +8,7 @@
 OsWorld Environment Implementation.
 
 Data Cleaning environment with multi-component grading,
-6 task variants across 3 difficulty tiers, and reward shaping.
+12 task variants across 3 difficulty tiers, and reward shaping.
 """
 
 import contextlib
@@ -39,7 +39,7 @@ class OsworldEnvironment(Environment):
     """
     Data Cleaning Environment with multi-component grading.
 
-    Supports 6 task variants across Easy/Medium/Hard tiers,
+    Supports 12 task variants across Easy/Medium/Hard tiers,
     step-wise reward shaping, and anti-cheat grading.
     """
 
@@ -244,6 +244,7 @@ class OsworldEnvironment(Environment):
         content = self.files.get(target_file, "")
         if content and len(self.task_config.expected_df) > 0:
             try:
+                import pandas as pd
                 df_curr = pd.read_csv(io.StringIO(content))
                 expected_len = len(self.task_config.expected_df)
                 if len(df_curr) < (0.2 * expected_len):

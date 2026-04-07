@@ -366,13 +366,101 @@ def gen_cascading_pipeline(seed: int) -> TaskConfig:
     )
 
 # ─────────────────────────────────────────────
+# ETL / TEXT-BASED MULTI-FORMAT TASKS
+# ─────────────────────────────────────────────
+
+def gen_sql_extraction(seed: int) -> TaskConfig:
+    fake = Faker()
+    fake.seed_instance(seed)
+    expected_rows = []
+    
+    sql_lines = [
+        "CREATE TABLE users (user_id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT);",
+        "CREATE TABLE purchases (id INTEGER PRIMARY KEY, user_id INTEGER, amount REAL);"
+    ]
+    
+    for i in range(1, 6):
+        fname = fake.first_name().lower()
+        lname = fake.last_name().lower()
+        amt = round(fake.random.uniform(10.5, 99.9), 2)
+        
+        sql_lines.append(f"INSERT INTO users (user_id, first_name, last_name) VALUES ({i}, '{fname}', '{lname}');")
+        sql_lines.append(f"INSERT INTO purchases (id, user_id, amount) VALUES ({i}, {i}, {amt});")
+        expected_rows.append({"id": i, "full_name": f"{fname} {lname}", "amount": amt})
+        
+    # Extra rogue data that shouldn't join
+    sql_lines.append(f"INSERT INTO purchases (id, user_id, amount) VALUES (99, 99, 50.0);")
+    
+    return TaskConfig(
+        files={"data.sql": "\n".join(sql_lines)},
+        screen_text="Medium task loaded. SQL Dump provided.",
+        task_description="You have 'data.sql'. It contains schema and inserts for 'users' and 'purchases'. Load it into an in-memory SQLite database, join the tables on user_id, combine first_name and last_name into 'full_name' (space separated), and save the result to 'data.csv'. Drop orphaned purchases.",
+        expected_df=pd.DataFrame(expected_rows),
+        constraints={"expected_cols": ["id", "full_name", "amount"], "expected_col_order": True, "unique_cols": ["id"], "no_null_cols": ["id", "full_name", "amount"], "target_file": "data.csv"},
+        optimal_steps=4
+    )
+
+def gen_html_scraping(seed: int) -> TaskConfig:
+    fake = Faker()
+    fake.seed_instance(seed)
+    expected_rows = []
+    
+    html = "<html><body><h1>User Data</h1><table id='users'><tr><th>IDENTIFIER</th><th>USER NAME</th><th>AGE</th></tr>"
+    for i in range(1, 6):
+        name = fake.first_name().lower()
+        age = fake.random_int(min=20, max=60)
+        html += f"<tr><td>{i}</td><td>  {name}  </td><td>{age}</td></tr>"
+        expected_rows.append({"id": i, "user_name": name, "age": age})
+        
+    html += "</table><div class='junk'>ignored data</div></body></html>"
+    
+    return TaskConfig(
+        files={"data.html": html},
+        screen_text="Medium task loaded. HTML Scraping task.",
+        task_description="You have 'data.html' containing a messy table. Parse it (e.g. using pandas.read_html), clean up whitespace in 'USER NAME', standardize columns to 'id', 'user_name', and 'age', and convert 'id' and 'age' to integers. Save to 'data.csv'.",
+        expected_df=pd.DataFrame(expected_rows),
+        constraints={"expected_cols": ["id", "user_name", "age"], "expected_col_order": True, "unique_cols": ["id"], "no_null_cols": ["id", "user_name", "age"], "target_file": "data.csv"},
+        optimal_steps=4
+    )
+
+def gen_log_parsing(seed: int) -> TaskConfig:
+    fake = Faker()
+    fake.seed_instance(seed)
+    expected_rows = []
+    
+    logs = [
+        "[INFO] System started normally.",
+        "[DEBUG] Memory check OK."
+    ]
+    
+    for i in range(1, 8):
+        name = fake.first_name().lower()
+        score = fake.random_int(min=0, max=100)
+        logs.append(f"[METRIC] | id={i} | user={name} | score={score} | latency={fake.random_int(min=10, max=90)}ms")
+        expected_rows.append({"id": i, "user": name, "score": score})
+        
+    logs.append("[ERROR] id=NaN user=NULL score=NaN")
+    logs.append("[METRIC] | id=99 | user=rogue | score=missing | latency=10ms") # Invalid score
+    random.shuffle(logs)
+    
+    df_expected = pd.DataFrame(expected_rows).sort_values("id").reset_index(drop=True)
+    return TaskConfig(
+        files={"server.log": "\n".join(logs)},
+        screen_text="Hard task loaded. Unstructured log parsing.",
+        task_description="Extract structured records from 'server.log'. Only process lines starting with '[METRIC]'. Extract 'id', 'user', and 'score'. Ignore lines where 'score' is not a valid integer. Save the clean tabular data to 'data.csv'.",
+        expected_df=df_expected,
+        constraints={"expected_cols": ["id", "user", "score"], "expected_col_order": True, "unique_cols": ["id"], "no_null_cols": ["id", "user", "score"], "target_file": "data.csv"},
+        optimal_steps=5
+    )
+
+# ─────────────────────────────────────────────
 # Task Registry & Accessors
 # ─────────────────────────────────────────────
 
 TASK_REGISTRY: Dict[TaskLevel, List[Callable[[int], TaskConfig]]] = {
     TaskLevel.EASY: [gen_duplicate_removal, gen_format_normalization, gen_type_coercion, gen_column_rename_only],
-    TaskLevel.MEDIUM: [gen_missing_value_imputation, gen_schema_repair, gen_constraint_enforcement, gen_multi_file_join, gen_json_normalization],
-    TaskLevel.HARD: [gen_pipeline_recovery, gen_adversarial_corruption, gen_cascading_pipeline],
+    TaskLevel.MEDIUM: [gen_missing_value_imputation, gen_schema_repair, gen_constraint_enforcement, gen_multi_file_join, gen_json_normalization, gen_sql_extraction, gen_html_scraping],
+    TaskLevel.HARD: [gen_pipeline_recovery, gen_adversarial_corruption, gen_cascading_pipeline, gen_log_parsing],
 }
 
 def get_task_setup(level: TaskLevel, seed: int, reset_count: int = 0) -> TaskConfig:

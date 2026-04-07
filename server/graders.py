@@ -63,9 +63,9 @@ class SemanticGrader:
     def _content_score(self, df: pd.DataFrame, expected_df: pd.DataFrame) -> float:
         """
         F1-based row matching via inner merge on common columns.
-        Uses EXACT values — no normalization. Formatting differences
-        (whitespace, casing) correctly reduce this score.
-        Numeric coercion only (int/float comparison).
+        Uses soft-matching (normalization) for strings and numeric coercion.
+        This provides a smoother gradient for partial progress (e.g. agent 
+        gets correct data but forgets to strip whitespace).
         """
         common_cols = list(set(df.columns) & set(expected_df.columns))
         if not common_cols:
