@@ -1,148 +1,291 @@
+---
+title: OsWorld-OpenEnv
+emoji: 🌍
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # OsWorld Data Cleaning Environment
 
-This is the **Data Cleaning Environment** built on the OpenEnv framework. It presents programmatic challenges of varying complexity where AI agents must read, diagnose, and clean data artifacts (`data.csv` files). 
+> A benchmark environment for training and evaluating LLM agents on multi-step data engineering and cleaning tasks.
 
-The environment uses structured Pydantic inputs, sandboxed Python code execution, a **multi-component semantic grader** (content F1 + schema + validity + constraints), potential-based reward shaping, and anti-cheat protections.
+---
 
-## Quick Start & Setup
+## 🧠 Architecture Overview
 
-The project is built using Python `uv` for lightning-fast dependency management.
+The **OsWorld Data Cleaning Environment** models data cleaning as a Markov Decision Process (MDP).
 
-1. **Install uv** (if you haven't already):
-   ```bash
-   pip install uv
-   ```
+- **State Representation**: Workspace files (CSV, JSON, SQL, HTML, logs) and task description  
+- **Action Space**: Structured actions (inspection, Python execution, utilities)  
+- **Semantic Grading**: Multi-component Φ (Phi) scoring system  
+- **Reward System**: Delta-based shaping with penalties and efficiency-scaled terminal rewards  
 
-2. **Clone and Install Dependencies**:
-   ```bash
-   # From the project root
-   uv sync
-   ```
+---
 
-## Environment Variables (.env)
+## 🚀 Quick Start
 
-The `baseline.py` script relies on an LLM to interact with the environment. It defaults to using OpenRouter (specifically the `gpt-4o-mini` model). 
-
-You must create a `.env` file in the root of the project with your API key:
-
-1. Create a file named `.env`:
-   ```env
-   OPENROUTER_API_KEY=your_openrouter_api_key_here
-   
-   # If you adjust baseline.py to use standard OpenAI:
-   # OPENAI_API_KEY=your_openai_api_key_here
-   ```
-
-*(Note: The environment server itself does not require an API key to run, only the baseline agent script requires it).*
-
-## Action and Observation Space Definitions
-
-### Observation Space (`OsworldObservation`)
-- `screen_text` (str): Terminal or textual output from the executed action.
-- `files` (Dict[str, str]): Key-value map of workspace file states (e.g., `'data.csv'` -> content).
-- `current_task` (str): Objective to accomplish.
-- `score` (float): Current normalized completion score from 0.0 to 1.0.
-- `done` (bool): Indicates episode termination.
-- `reward` (float): Calculated Delta-Phi shaped reward.
-
-### Action Space (`OsworldAction`)
-Actions strictly conform to a Pydantic structure utilizing `action_type` (str) and `payload` (Dict):
-- `action_type`: One of `"inspect_schema"`, `"view_head"`, `"read_file"`, `"preview_changes"`, `"execute_python"`, `"remove_duplicates"`, or `"fill_nulls"`.
-- `payload`: Contains parameters such as `"code"` (str, executed inside sandbox), `"filename"` (str), or `"n"` (int).
-
-## Task Structure
-The environment includes **12 task variants** across 3 difficulty tiers:
-
-### Easy (4 variants)
-| Variant | Description |
-|---------|-------------|
-| **Duplicate Removal** | Standardize column names. Remove duplicate rows. |
-| **Format Normalization** | Standardize names to lowercase without leading/trailing whitespace. |
-| **Type Coercion** | Convert ages to int, Yes/No to booleans, standardize columns. |
-| **Column Rename Only** | Properly rename column headers. |
-
-### Medium (5 variants)
-| Variant | Description |
-|---------|-------------|
-| **Missing Value Imputation** | Drop extra columns, standardize names, fill missing with 0. |
-| **Schema Repair** | Standardize weird column names and strip extra flags. |
-| **Constraint Enforcement** | Deduplicate, enforce bounds, standardize names. |
-| **Multi-File Join** | Clean secondary file, join on user_id, save as new csv. |
-| **JSON Normalization** | Flatten deeply nested JSON into standard tabular dataframe. |
-
-### Hard (3 variants)
-| Variant | Description |
-|---------|-------------|
-| **Corrupted Pipeline Recovery** | Corrupted rows, bounds enforcement, str cleaning, dedup, fill. |
-| **Adversarial Corruption** | Syntactically intact but semantically impossible constraints. |
-| **Cascading Pipeline** | Multi-file dependency. Extract rates, compute new columns, fill bounds. |
-
-Tasks cycle automatically on each `reset()` call.
-
-## Grading System
-
-The environment uses a **multi-component semantic grader** (not simple string matching):
-
-```
-Score = 0.4 * content_score    (F1: precision + recall via merge)
-      + 0.2 * schema_score     (column name Jaccard + order bonus)
-      + 0.2 * validity_score   (nulls, types, formatting)
-      + 0.2 * constraint_score (uniqueness, ranges)
-      - extra_row_penalty      (anti-cheat)
+### 1. Prerequisites
+```bash
+pip install uv
 ```
 
-## Running the Project
+### 2. Installation
 
-### 1. Run the Benchmarking Inference Script (Hackathon)
-To run a strictly validated evaluation producing OpenEnv standard `[START]`, `[STEP]`, `[END]` outputs:
+```bash
+uv sync
+```
+
+### 3. Environment Configuration
+
+Create a `.env` file:
+
+```env
+HF_TOKEN=your_huggingface_token
+MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
+API_BASE_URL=https://router.huggingface.co/v1
+
+# Optional fallback
+OPENROUTER_API_KEY=your_key
+```
+
+---
+
+## 📋 Task Scenarios
+
+The environment contains **15 task variants** across 3 difficulty tiers.
+
+Each `reset()` returns a deterministic task instance, cycling through predefined variants.
+
+> During benchmarking (`inference.py`), only a **single episode** is executed per run to ensure strict evaluation consistency.
+
+---
+
+### 🌟 Easy Tier (4 Variants)
+
+* **Duplicate Removal**
+  Standardize columns (`id`, `name`) and remove duplicates
+
+* **Format Normalization**
+  Strip whitespace and normalize strings to lowercase
+
+* **Type Coercion**
+  Convert semantic strings into correct types
+
+* **Column Rename**
+  Pure schema alignment
+
+---
+
+### ⚡ Medium Tier (7 Variants)
+
+* Missing value imputation
+* Schema repair
+* Constraint enforcement
+* Multi-file joins
+* JSON normalization
+* SQL extraction
+* HTML scraping
+
+---
+
+### 🔥 Hard Tier (4 Variants)
+
+* Corrupted pipeline recovery
+* Adversarial data fixing
+* Cascading multi-file transformations
+* Log parsing
+
+---
+
+## 🔁 Interaction Loop
+
+Each episode follows:
+
+1. Agent receives observation (files + task)
+2. Agent emits an action
+3. Environment executes action in sandbox
+4. Returns updated state, reward, and score
+
+Loop continues until termination or max steps.
+
+---
+
+## 📊 Evaluation System
+
+### Φ Score (Semantic Grading)
+
+$$
+\Phi = 0.4 \cdot content + 0.2 \cdot schema + 0.2 \cdot validity + 0.2 \cdot constraints - penalty
+$$
+
+* All components normalized to **[0, 1]**
+* Final Φ is clamped to **[0, 1]**
+* **Task is solved when Φ = 1.0**
+
+---
+
+### Component Breakdown
+
+**Content (40%)**
+F1-based row matching (precision + recall)
+
+**Schema (20%)**
+Column overlap + ordering consistency (capped ≤ 1.0)
+
+**Validity (20%)**
+
+* Null handling
+* Type correctness
+* Format consistency
+
+**Constraints (20%)**
+
+* Uniqueness
+* Value ranges
+* Task-specific rules
+
+---
+
+### Anti-Cheat Penalty
+
+$$
+penalty = \min\left(0.3,\; 0.1 \cdot \frac{\max(0, n_{agent} - n_{expected})}{n_{expected}}\right)
+$$
+
+Prevents:
+
+* Row inflation
+* Duplicate exploitation
+* Partial-output hacks
+
+---
+
+## 🎯 Reward Function
+
+The reward at each step is:
+
+```
+R = step_penalty
+  + (new_score - old_score)
+  + regression_penalty (if score drops)
+  + error_penalty
+  + destructive_penalty
+  + terminal_bonus (if done)
+```
+
+---
+
+### 🔥 Terminal Reward Scaling
+
+When the episode ends, a **terminal bonus** is applied:
+
+```
+terminal_bonus = α * final_score * efficiency_factor
+```
+
+Where:
+
+* **final_score = Φ (final semantic score)**
+* **α = terminal scaling constant (e.g., 5.0)**
+
+---
+
+### ⚡ Efficiency Factor
+
+Encourages fewer steps:
+
+```
+efficiency_factor = max(0.3, 1 - steps_used / max_steps)
+```
+
+Properties:
+
+* Faster solutions → higher reward
+* Slow agents are penalized but not zeroed
+* Minimum floor prevents reward collapse
+
+---
+
+### 🧠 Reward Properties
+
+* **Dense feedback** → incremental progress rewarded
+* **Regression penalty** → discourages breaking correct states
+* **Execution penalties** → punishes unsafe/destructive actions
+* **Efficiency scaling** → promotes optimal planning
+
+---
+
+## 🤖 Agent Constraints
+
+* Agent only sees provided files
+* Tasks are defined in `current_task`
+* Execution occurs in sandboxed Python
+* Available libraries: `pandas`, `io`, etc.
+* Agent primarily uses `execute_python`, with optional inspection steps
+
+---
+
+## 🚀 Usage
+
+### Benchmark Mode
+
 ```bash
 uv run inference.py
 ```
-**Baseline Scores:**
-Using our default `Qwen/Qwen2.5-72B-Instruct` via a remote API endpoint reliably nets a normalized `score` of **~0.90** on Easy Tasks, and **~0.60** on Hard tasks. The soft multi-component grader guarantees meaningful signal and partial rewards!
 
-### 2. Standalone Server Mode
-If you are developing your own agent, run the server separately:
-```bash
-uvicorn server.app:app --port 8000 --reload
+Outputs strict logs:
+
+```
+[START]
+[STEP]
+[END]
 ```
 
-And in your agent script, connect to it:
-```python
-from client import OsworldEnv
-env = OsworldEnv(url="ws://localhost:8000")
-env.reset()  # Cycles through tasks automatically
-```
+---
 
-### 3. Run Evaluation Tests
-Verify grader, rewards, and anti-cheat protections:
+### Evaluation
+
 ```bash
 uv run python eval.py
 ```
 
-## Documentation
+---
 
-For deep dives into how the underlying architecture works, see `Build_process/`:
+### Run Server
 
-- [**Scenarios and Difficulties**](Build_process/01_scenarios_and_difficulties.md): Details on the 12 task variants across Easy, Medium, and Hard tiers.
-- [**Semantic Grading Mechanics**](Build_process/02_grading_mechanics.md): How the multi-component grader eliminates the vulnerabilities of string-matching and merge-only scoring.
-- [**Reward Shaping & Scoring**](Build_process/03_reward_shaping.md): How potential-based reward shaping with regression penalties enforces optimal reasoning paths.
-
-## Project Structure
-```text
-OsWorld/
-├── Build_process/         # Architectural documentation
-├── __init__.py            # Module exports
-├── client.py              # OsworldEnv client
-├── models.py              # Strict Action and Observation Pydantic models
-├── baseline.py            # Reference agent using OpenRouter LLM
-├── eval.py                # Grader, reward, and anti-exploit tests
-├── openenv.yaml           # OpenEnv manifest
-├── pyproject.toml         # Requirements
-└── server/
-    ├── OsWorld_environment.py  # Core environment logic
-    ├── tasks.py           # 12 task variants with expected states + constraints
-    ├── graders.py         # Multi-component semantic grader (Phi)
-    ├── rewards.py         # Reward shaping calculator
-    └── app.py             # FastAPI App
+```bash
+uv run uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
+
+---
+
+## 📂 Project Structure
+
+```
+OsWorld/
+├── server/
+│   ├── tasks.py
+│   ├── graders.py
+│   └── OsWorld_environment.py
+├── models.py
+├── client.py
+├── inference.py
+└── openenv.yaml
+```
+
+---
+
+## 🧠 Design Philosophy
+
+* Semantic correctness over exact matching
+* Robustness against reward hacking
+* Real-world data complexity
+* Multi-step reasoning evaluation
+* Efficiency-aware agent behavior
+
+---
+
+*Built for OpenEnv Hackathon | Designed for serious agent evaluation*
