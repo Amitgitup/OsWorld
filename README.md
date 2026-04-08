@@ -7,47 +7,47 @@ sdk: docker
 app_port: 8000
 pinned: false
 ---
+
 # OsWorld Data Cleaning Environment
 
-> [!TIP]
-> This environment is specifically designed for Training and Benchmarking Large Language Models (LLMs) on complex, multi-step Data Engineering and Cleaning tasks.
+> A benchmark environment for training and evaluating LLM agents on multi-step data engineering and cleaning tasks.
 
 ---
 
 ## 🧠 Architecture Overview
 
-The **OsWorld Data Cleaning Environment** is built on the [OpenEnv](https://github.com/meta-pytorch/OpenEnv) framework, providing a robust Markov Decision Process (MDP) for agentic research. 
+The **OsWorld Data Cleaning Environment** models data cleaning as a Markov Decision Process (MDP).
 
-- **State Representation**: Comprehensive environment state including workspace file contents and task descriptions.
-- **Action Space**: Structured Pydantic actions for file inspection, Python execution within a secure sandbox, and automated utility tools.
-- **Semantic Grading**: A multi-component Φ (Phi) score that evaluates content, schema, validity, and constraints.
-- **Reward Shaping**: Potential-based reward shaping with regression penalties and efficiency-scaled terminal bonuses.
+- **State Representation**: Workspace files (CSV, JSON, SQL, HTML, logs) and task description  
+- **Action Space**: Structured actions (inspection, Python execution, utilities)  
+- **Semantic Grading**: Multi-component Φ (Phi) scoring system  
+- **Reward System**: Delta-based shaping with penalties and efficiency-scaled terminal rewards  
 
 ---
 
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
-Ensure you have the `uv` package manager installed:
 ```bash
 pip install uv
 ```
 
 ### 2. Installation
-Clone the repository and sync dependencies:
+
 ```bash
 uv sync
 ```
 
 ### 3. Environment Configuration
-Create a `.env` file in the root directory:
+
+Create a `.env` file:
+
 ```env
-# Required for inference.py
 HF_TOKEN=your_huggingface_token
 MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
 API_BASE_URL=https://router.huggingface.co/v1
 
-# Required for baseline.py (OpenRouter fallback)
+# Optional fallback
 OPENROUTER_API_KEY=your_key
 ```
 
@@ -55,74 +55,207 @@ OPENROUTER_API_KEY=your_key
 
 ## 📋 Task Scenarios
 
-The environment features **15 procedurally generated variants** across three difficulty tiers. Each `reset()` call cycles through these tiers to challenge the agent's generalization capabilities.
+The environment contains **15 task variants** across 3 difficulty tiers.
 
-### 🌟 Easy Tier (4 Variants)
-| Variant | Description |
-| :--- | :--- |
-| **Duplicate Removal** | Standardize column names (`id`, `name`) and deduplicate records. |
-| **Format Normalization** | Whitespace stripping and lowercase string standardization. |
-| **Type Coercion** | Converting semantic strings (e.g., "18 yrs") into native Python types. |
-| **Column Rename** | Pure schema alignment for mixed-case and non-standard headers. |
+Each `reset()` returns a deterministic task instance, cycling through predefined variants.
 
-### ⚡ Medium Tier (7 Variants)
-| Variant | Description |
-| :--- | :--- |
-| **Missing Imputation** | Intelligent null handling and redundant column pruning. |
-| **Schema Repair** | Advanced mapping of unstructured headers to target specs. |
-| **Constraint Enforcement** | Value clamping (e.g., `[0, 100]`) and cross-row uniqueness. |
-| **Multi-File Join** | Clean-and-Join operations across `users.csv` and `orders.csv`. |
-| **JSON Normalization** | Flattening ragged, deeply nested JSON into tabular CSVs. |
-| **SQL Extraction** | Loading SQL dumps into SQLite and exporting a normalized join. |
-| **HTML Scraping** | Parsing messy HTML tables into clean structured formats. |
-
-### 🔥 Hard Tier (4 Variants)
-| Variant | Description |
-| :--- | :--- |
-| **Pipeline Recovery** | Complex multi-failure recovery (nulls + dups + corrupt strings). |
-| **Adversarial Data** | Resolving biologically/semantically impossible data values. |
-| **Cascading Pipeline** | Multi-file dependency logic (currency conversion rates). |
-| **Log Parsing** | Extracting structured metrics from unstructured system logs. |
+> During benchmarking (`inference.py`), only a **single episode** is executed per run to ensure strict evaluation consistency.
 
 ---
 
-## 📊 Evaluation & Mechanics
+### 🌟 Easy Tier (4 Variants)
 
-### Semantic Grading System (Φ)
-Unlike simple string matching, our grader uses a weighted combination of four orthogonal components:
+* **Duplicate Removal**
+  Standardize columns (`id`, `name`) and remove duplicates
 
-| Component | Weight | Metric |
-| :--- | :--- | :--- |
-| **Content** | 40% | F1-Score row matching via soft-normalized merge. |
-| **Schema** | 20% | Column Jaccard overlap + strict order bonus. |
-| **Validity** | 20% | Null-ratio, type correctness, and formatting quality. |
-| **Constraints** | 20% | Uniqueness and valid range satisfaction. |
+* **Format Normalization**
+  Strip whitespace and normalize strings to lowercase
 
-> [!IMPORTANT]
-> **Anti-Cheat**: An `extra_row_penalty` is applied to prevent agents from dumping excessive junk rows to game the precision/recall metrics.
+* **Type Coercion**
+  Convert semantic strings into correct types
 
-### Reward Shaping
-The environment provides a shaped reward $R$ calculated as:
-$$R = \text{Step Penalty} + \Delta\Phi + \text{Regression Penalty} + \text{Terminal Bonus}$$
+* **Column Rename**
+  Pure schema alignment
+
+---
+
+### ⚡ Medium Tier (7 Variants)
+
+* Missing value imputation
+* Schema repair
+* Constraint enforcement
+* Multi-file joins
+* JSON normalization
+* SQL extraction
+* HTML scraping
+
+---
+
+### 🔥 Hard Tier (4 Variants)
+
+* Corrupted pipeline recovery
+* Adversarial data fixing
+* Cascading multi-file transformations
+* Log parsing
+
+---
+
+## 🔁 Interaction Loop
+
+Each episode follows:
+
+1. Agent receives observation (files + task)
+2. Agent emits an action
+3. Environment executes action in sandbox
+4. Returns updated state, reward, and score
+
+Loop continues until termination or max steps.
+
+---
+
+## 📊 Evaluation System
+
+### Φ Score (Semantic Grading)
+
+$$
+\Phi = 0.4 \cdot content + 0.2 \cdot schema + 0.2 \cdot validity + 0.2 \cdot constraints - penalty
+$$
+
+* All components normalized to **[0, 1]**
+* Final Φ is clamped to **[0, 1]**
+* **Task is solved when Φ = 1.0**
+
+---
+
+### Component Breakdown
+
+**Content (40%)**
+F1-based row matching (precision + recall)
+
+**Schema (20%)**
+Column overlap + ordering consistency (capped ≤ 1.0)
+
+**Validity (20%)**
+
+* Null handling
+* Type correctness
+* Format consistency
+
+**Constraints (20%)**
+
+* Uniqueness
+* Value ranges
+* Task-specific rules
+
+---
+
+### Anti-Cheat Penalty
+
+$$
+penalty = \min\left(0.3,\; 0.1 \cdot \frac{\max(0, n_{agent} - n_{expected})}{n_{expected}}\right)
+$$
+
+Prevents:
+
+* Row inflation
+* Duplicate exploitation
+* Partial-output hacks
+
+---
+
+## 🎯 Reward Function
+
+The reward at each step is:
+
+```
+R = step_penalty
+  + (new_score - old_score)
+  + regression_penalty (if score drops)
+  + error_penalty
+  + destructive_penalty
+  + terminal_bonus (if done)
+```
+
+---
+
+### 🔥 Terminal Reward Scaling
+
+When the episode ends, a **terminal bonus** is applied:
+
+```
+terminal_bonus = α * final_score * efficiency_factor
+```
+
+Where:
+
+* **final_score = Φ (final semantic score)**
+* **α = terminal scaling constant (e.g., 5.0)**
+
+---
+
+### ⚡ Efficiency Factor
+
+Encourages fewer steps:
+
+```
+efficiency_factor = max(0.3, 1 - steps_used / max_steps)
+```
+
+Properties:
+
+* Faster solutions → higher reward
+* Slow agents are penalized but not zeroed
+* Minimum floor prevents reward collapse
+
+---
+
+### 🧠 Reward Properties
+
+* **Dense feedback** → incremental progress rewarded
+* **Regression penalty** → discourages breaking correct states
+* **Execution penalties** → punishes unsafe/destructive actions
+* **Efficiency scaling** → promotes optimal planning
+
+---
+
+## 🤖 Agent Constraints
+
+* Agent only sees provided files
+* Tasks are defined in `current_task`
+* Execution occurs in sandboxed Python
+* Available libraries: `pandas`, `io`, etc.
+* Agent primarily uses `execute_python`, with optional inspection steps
 
 ---
 
 ## 🚀 Usage
 
-### Benchmarking (Hackathon Mode)
-Run the strictly validated benchmarking script to produce standard `[START]`, `[STEP]`, `[END]` logs:
+### Benchmark Mode
+
 ```bash
 uv run inference.py
 ```
 
-### Evaluation Suite
-Verify the robustness of the graders and reward shaping:
+Outputs strict logs:
+
+```
+[START]
+[STEP]
+[END]
+```
+
+---
+
+### Evaluation
+
 ```bash
 uv run python eval.py
 ```
 
-### Standalone Server
-Run the FastAPI environment server for custom agent development:
+---
+
+### Run Server
+
 ```bash
 uv run uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
@@ -130,18 +263,29 @@ uv run uvicorn server.app:app --host 0.0.0.0 --port 8000
 ---
 
 ## 📂 Project Structure
-```text
+
+```
 OsWorld/
-├── Build_process/         # Technical deep-dives and design docs
-├── server/                # Core Environment Implementation
-│   ├── tasks.py           # 15 Procedural Task Generators
-│   ├── graders.py         # Semantic Phi-Grader Logic
-│   └── OsWorld_environment.py # State Machine & Sandbox Logic
-├── models.py              # Pydantic Action/Observation Specs
-├── client.py              # High-performance WebSocket Client
-├── inference.py           # Standard Benchmarking Script
-└── openenv.yaml           # OpenEnv Manifest
+├── server/
+│   ├── tasks.py
+│   ├── graders.py
+│   └── OsWorld_environment.py
+├── models.py
+├── client.py
+├── inference.py
+└── openenv.yaml
 ```
 
 ---
-*Developed for the OpenEnv Hackathon | Built for Scalable Agent Research.*
+
+## 🧠 Design Philosophy
+
+* Semantic correctness over exact matching
+* Robustness against reward hacking
+* Real-world data complexity
+* Multi-step reasoning evaluation
+* Efficiency-aware agent behavior
+
+---
+
+*Built for OpenEnv Hackathon | Designed for serious agent evaluation*

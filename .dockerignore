@@ -20,3 +20,5 @@ README.md
 implementation_plan.md
 task.md
 walkthrough.md
+validate-submission.sh
+verify_deployment.py

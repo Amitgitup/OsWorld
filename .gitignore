@@ -35,3 +35,5 @@ eval_*.txt
 
 # Project specific
 .openenv/
+validate-submission.sh
+verify_deployment.py
