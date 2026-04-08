@@ -39,24 +39,28 @@ RUN .venv/bin/openenv validate
 # Minimal final image containing only the application and its dependencies
 FROM python:3.10-slim
 
+# Hugging Face Spaces strictly require running as a non-root user (uid 1000)
+RUN useradd -m -u 1000 user
+USER user
+
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy the pre-built virtual environment from the builder stage
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder --chown=user:user /app/.venv /app/.venv
 # Copy the cleaned source code
-COPY --from=builder /app /app
+COPY --from=builder --chown=user:user /app /app
 
 # Point PATH and PYTHONPATH to our isolated virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app:$PYTHONPATH"
 
-# OpenEnv standard port
-EXPOSE 8000
+# Hugging Face default port
+EXPOSE 7860
 
 # Health Check to verify the FastAPI bridge is active
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:7860/health || exit 1
 
-# Start the environment server
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the environment server on HF Port 7860
+CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
